@@ -1,0 +1,55 @@
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  imageName: employee-artifact
+  dockerRegistryServiceConnection: acr-service-connection
+
+steps:
+
+  # ==========================================
+  # 1. Build Spring Boot Application
+  # ==========================================
+
+  - task: Gradle@3
+    displayName: 'Build Spring Boot Application'
+    inputs:
+      gradleWrapperFile: 'gradlew'
+      tasks: 'clean bootJar'
+      publishJUnitResults: true
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: '17'
+
+
+  # ==========================================
+  # 2. Build Docker Image
+  # ==========================================
+
+  - task: Docker@2
+    displayName: 'Build Docker Image'
+    inputs:
+      command: build
+      containerRegistry: $(dockerRegistryServiceConnection)
+      repository: $(imageName)
+      Dockerfile: '**/Dockerfile'
+      tags: |
+        latest
+        $(Build.BuildId)
+  
+
+  # ==========================================
+  # 3. Push Docker Image to ACR
+  # ==========================================
+
+  - task: Docker@2
+    displayName: 'Push Docker Image'
+    inputs:
+      command: push
+      containerRegistry: $(dockerRegistryServiceConnection)
+      repository: $(imageName)
+      tags: |
+        latest
+        $(Build.BuildId)
