@@ -5,8 +5,8 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  imageName: employee-artifact
   dockerRegistryServiceConnection: acr-service-connection
+  imageRepository: employee.azurecr.io/employee-artifact
 
 steps:
 
@@ -25,31 +25,16 @@ steps:
 
 
   # ==========================================
-  # 2. Build Docker Image
+  # 2. Build and Push Docker Image to ACR
   # ==========================================
 
   - task: Docker@2
-    displayName: 'Build Docker Image'
+    displayName: 'Build and Push Docker Image'
     inputs:
-      command: build
-      containerRegistry: $(dockerRegistryServiceConnection)
-      repository: $(imageName)
+      command: 'buildAndPush'
+      containerRegistry: '$(dockerRegistryServiceConnection)'
+      repository: '$(imageRepository)'
       Dockerfile: '**/Dockerfile'
-      tags: |
-        latest
-        $(Build.BuildId)
-  
-
-  # ==========================================
-  # 3. Push Docker Image to ACR
-  # ==========================================
-
-  - task: Docker@2
-    displayName: 'Push Docker Image'
-    inputs:
-      command: push
-      containerRegistry: $(dockerRegistryServiceConnection)
-      repository: $(imageName)
       tags: |
         latest
         $(Build.BuildId)
