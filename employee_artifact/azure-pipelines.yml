@@ -1,3 +1,4 @@
+```yaml
 trigger:
   - main
 
@@ -11,48 +12,28 @@ variables:
 steps:
 
   # ==========================================
-  # 0. Check Workspace
+  # 0. Go to Spring Boot Project Directory
   # ==========================================
 
   - script: |
-      echo "=========================================="
-      echo "Current Working Directory"
-      echo "=========================================="
+      cd employee_artifact/
+      echo "Current directory:"
       pwd
-
       echo ""
-      echo "=========================================="
-      echo "Files in Current Directory"
-      echo "=========================================="
+      echo "Files:"
       ls -lrth
-
-      echo ""
-      echo "=========================================="
-      echo "Gradle Wrapper Check"
-      echo "=========================================="
-      ls -lrth gradlew || true
-
-      echo ""
-      echo "=========================================="
-      echo "Recursive Project Structure"
-      echo "=========================================="
-      find . -maxdepth 2 -type f | sort
-
-    displayName: 'Check Pipeline Workspace'
+    displayName: 'Go to Employee Artifact Directory'
 
 
   # ==========================================
   # 1. Build Spring Boot Application
   # ==========================================
 
-  - task: Gradle@3
+  - script: |
+      cd employee_artifact/
+      chmod +x gradlew
+      ./gradlew clean bootJar
     displayName: 'Build Spring Boot Application'
-    inputs:
-      gradleWrapperFile: 'gradlew'
-      tasks: 'clean bootJar'
-      publishJUnitResults: true
-      javaHomeOption: 'JDKVersion'
-      jdkVersionOption: '17'
 
 
   # ==========================================
@@ -65,7 +46,45 @@ steps:
       command: 'buildAndPush'
       containerRegistry: '$(dockerRegistryServiceConnection)'
       repository: '$(imageRepository)'
-      Dockerfile: '**/Dockerfile'
+      Dockerfile: 'employee_artifact/Dockerfile'
+      buildContext: 'employee_artifact'
       tags: |
         latest
         $(Build.BuildId)
+```
+
+The important part is:
+
+```yaml
+- script: |
+    cd employee_artifact/
+    chmod +x gradlew
+    ./gradlew clean bootJar
+```
+
+This avoids the previous `Gradle@3` wrapper-path problem entirely. It explicitly enters:
+
+```text
+/home/vsts/work/1/s/employee_artifact
+```
+
+and runs:
+
+```text
+./gradlew
+```
+
+using your **Gradle 9.7.1 wrapper**.
+
+After the build succeeds, Docker uses:
+
+```text
+employee_artifact/Dockerfile
+```
+
+and pushes:
+
+```text
+employee.azurecr.io/employee-artifact:latest
+```
+
