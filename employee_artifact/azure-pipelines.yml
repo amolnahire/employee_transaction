@@ -11,6 +11,37 @@ variables:
 steps:
 
   # ==========================================
+  # 0. Check Workspace
+  # ==========================================
+
+  - script: |
+      echo "=========================================="
+      echo "Current Working Directory"
+      echo "=========================================="
+      pwd
+
+      echo ""
+      echo "=========================================="
+      echo "Files in Current Directory"
+      echo "=========================================="
+      ls -lrth
+
+      echo ""
+      echo "=========================================="
+      echo "Gradle Wrapper Check"
+      echo "=========================================="
+      ls -lrth gradlew || true
+
+      echo ""
+      echo "=========================================="
+      echo "Recursive Project Structure"
+      echo "=========================================="
+      find . -maxdepth 2 -type f | sort
+
+    displayName: 'Check Pipeline Workspace'
+
+
+  # ==========================================
   # 1. Build Spring Boot Application
   # ==========================================
 
