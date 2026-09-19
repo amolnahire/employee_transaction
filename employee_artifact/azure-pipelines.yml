@@ -5,8 +5,8 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  dockerRegistryServiceConnection: acr-service-connection
-  imageRepository: employee.azurecr.io/employee-artifact
+  dockerRegistryServiceConnection: 'acr-service-connection'
+  imageRepository: 'employee-artifact'
 
 steps:
 
