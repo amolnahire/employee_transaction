@@ -1,6 +1,6 @@
-```yaml
+
 trigger:
-  - master
+  - main
 
 pool:
   vmImage: ubuntu-latest
@@ -12,32 +12,36 @@ variables:
 steps:
 
   # ==========================================
-  # 0. Go to Spring Boot Project Directory
+  # 1. Check Repository
   # ==========================================
 
   - script: |
-      cd employee_artifact/
-      echo "Current directory:"
       pwd
-      echo ""
-      echo "Files:"
+      echo "Repository contents:"
       ls -lrth
-    displayName: 'Go to Employee Artifact Directory'
+
+      echo "Employee artifact contents:"
+      cd employee_artifact
+      ls -lrth
+
+      echo "Gradle wrapper:"
+      ls -l gradlew
+    displayName: 'Check Project Files'
 
 
   # ==========================================
-  # 1. Build Spring Boot Application
+  # 2. Build Spring Boot Application
   # ==========================================
 
   - script: |
-      cd employee_artifact/
+      cd employee_artifact
       chmod +x gradlew
       ./gradlew clean bootJar
     displayName: 'Build Spring Boot Application'
 
 
   # ==========================================
-  # 2. Build and Push Docker Image to ACR
+  # 3. Build and Push Docker Image to ACR
   # ==========================================
 
   - task: Docker@2
@@ -51,40 +55,3 @@ steps:
       tags: |
         latest
         $(Build.BuildId)
-```
-
-The important part is:
-
-```yaml
-- script: |
-    cd employee_artifact/
-    chmod +x gradlew
-    ./gradlew clean bootJar
-```
-
-This avoids the previous `Gradle@3` wrapper-path problem entirely. It explicitly enters:
-
-```text
-/home/vsts/work/1/s/employee_artifact
-```
-
-and runs:
-
-```text
-./gradlew
-```
-
-using your **Gradle 9.7.1 wrapper**.
-
-After the build succeeds, Docker uses:
-
-```text
-employee_artifact/Dockerfile
-```
-
-and pushes:
-
-```text
-employee.azurecr.io/employee-artifact:latest
-```
-
