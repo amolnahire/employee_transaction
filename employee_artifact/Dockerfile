@@ -9,6 +9,6 @@ RUN mkdir -p /app/data && \
 
 USER 1000:1000
 
-EXPOSE 8081
+EXPOSE 8082
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
