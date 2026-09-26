@@ -1,4 +1,8 @@
 
+
+
+
+
 trigger:
   - main
 
@@ -6,52 +10,38 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  dockerRegistryServiceConnection: 'acr-service-connection'
+  projectDir: 'employee_artifact'
+  dockerRegistryServiceConnection: 'employeeregistry-service-connection'
   imageRepository: 'employee-artifact'
 
 steps:
-
-  # ==========================================
-  # 1. Check Repository
-  # ==========================================
-
   - script: |
+      echo "Repository root: $(Build.SourcesDirectory)"
       pwd
-      echo "Repository contents:"
       ls -lrth
 
-      echo "Employee artifact contents:"
-      cd employee_artifact
-      ls -lrth
+      echo "Project directory contents:"
+      ls -lrth "$(Build.SourcesDirectory)/$(projectDir)"
 
-      echo "Gradle wrapper:"
-      ls -l gradlew
+      echo "Gradle wrapper permissions:"
+      ls -l "$(Build.SourcesDirectory)/$(projectDir)/gradlew"
     displayName: 'Check Project Files'
 
-
-  # ==========================================
-  # 2. Build Spring Boot Application
-  # ==========================================
-
   - script: |
-      cd employee_artifact
+      cd "$(Build.SourcesDirectory)/$(projectDir)"
       chmod +x gradlew
-      ./gradlew clean bootJar
+      ./gradlew clean bootJar --no-daemon
     displayName: 'Build Spring Boot Application'
 
-
-  # ==========================================
-  # 3. Build and Push Docker Image to ACR
-  # ==========================================
-
   - task: Docker@2
-    displayName: 'Build and Push Docker Image'
+    displayName: 'Build and Push Docker Image to ACR'
     inputs:
       command: 'buildAndPush'
       containerRegistry: '$(dockerRegistryServiceConnection)'
       repository: '$(imageRepository)'
-      Dockerfile: 'employee_artifact/Dockerfile'
-      buildContext: 'employee_artifact'
+      Dockerfile: '$(Build.SourcesDirectory)/$(projectDir)/Dockerfile'
+      buildContext: '$(Build.SourcesDirectory)/$(projectDir)'
       tags: |
         latest
         $(Build.BuildId)
+
