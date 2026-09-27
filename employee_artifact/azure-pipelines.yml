@@ -6,7 +6,7 @@ pool:
 
 variables:
   projectDir: 'employee_artifact'
-  dockerRegistryServiceConnection: 'employee-acr-docker-connection'
+  dockerRegistryServiceConnection: 'employeeregistry-service-connection'
   imageRepository: 'employee-artifact'
 
 steps:
