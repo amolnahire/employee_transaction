@@ -1,8 +1,3 @@
-
-
-
-
-
 trigger:
   - main
 
@@ -11,7 +6,7 @@ pool:
 
 variables:
   projectDir: 'employee_artifact'
-  dockerRegistryServiceConnection: 'employeeregistry-service-connection'
+  dockerRegistryServiceConnection: 'employee-acr-docker-connection'
   imageRepository: 'employee-artifact'
 
 steps:
