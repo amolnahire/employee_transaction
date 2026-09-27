@@ -6,10 +6,12 @@ pool:
 
 variables:
   projectDir: 'employee_artifact'
-  dockerRegistryServiceConnection: 'employeeregistry-service-connection'
+  azureServiceConnection: 'employeeregistry-service-connection'
+  acrName: 'employeeregistry'
   imageRepository: 'employee-artifact'
 
 steps:
+
   - script: |
       echo "Repository root: $(Build.SourcesDirectory)"
       pwd
@@ -28,15 +30,31 @@ steps:
       ./gradlew clean bootJar --no-daemon
     displayName: 'Build Spring Boot Application'
 
-  - task: Docker@2
+  - task: AzureCLI@2
     displayName: 'Build and Push Docker Image to ACR'
     inputs:
-      command: 'buildAndPush'
-      containerRegistry: '$(dockerRegistryServiceConnection)'
-      repository: '$(imageRepository)'
-      Dockerfile: '$(Build.SourcesDirectory)/$(projectDir)/Dockerfile'
-      buildContext: '$(Build.SourcesDirectory)/$(projectDir)'
-      tags: |
-        latest
-        $(Build.BuildId)
+      azureSubscription: '$(azureServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
 
+        echo "Logging in to Azure Container Registry..."
+        az acr login --name "$(acrName)"
+
+        cd "$(Build.SourcesDirectory)/$(projectDir)"
+
+        echo "Building Docker image..."
+
+        docker build \
+          -t "$(acrName).azurecr.io/$(imageRepository):latest" \
+          -t "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)" \
+          .
+
+        echo "Pushing latest image..."
+        docker push "$(acrName).azurecr.io/$(imageRepository):latest"
+
+        echo "Pushing Build ID image..."
+        docker push "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "Images pushed successfully."
