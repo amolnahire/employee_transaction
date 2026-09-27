@@ -7,11 +7,18 @@ pool:
 variables:
   projectDir: 'employee_artifact'
   azureServiceConnection: 'employeeregistry-service-connection'
+
   acrName: 'employeeregistry'
   imageRepository: 'employee-artifact'
 
+  resourceGroup: 'employee-resource'
+  containerAppName: 'employee-container'
+
 steps:
 
+  # --------------------------------------------------
+  # 1. Check Project Files
+  # --------------------------------------------------
   - script: |
       echo "Repository root: $(Build.SourcesDirectory)"
       pwd
@@ -24,12 +31,22 @@ steps:
       ls -l "$(Build.SourcesDirectory)/$(projectDir)/gradlew"
     displayName: 'Check Project Files'
 
+
+  # --------------------------------------------------
+  # 2. Build Spring Boot Application
+  # --------------------------------------------------
   - script: |
       cd "$(Build.SourcesDirectory)/$(projectDir)"
+
       chmod +x gradlew
+
       ./gradlew clean bootJar --no-daemon
     displayName: 'Build Spring Boot Application'
 
+
+  # --------------------------------------------------
+  # 3. Build and Push Docker Image
+  # --------------------------------------------------
   - task: AzureCLI@2
     displayName: 'Build and Push Docker Image to ACR'
     inputs:
@@ -40,6 +57,7 @@ steps:
         set -e
 
         echo "Logging in to Azure Container Registry..."
+
         az acr login --name "$(acrName)"
 
         cd "$(Build.SourcesDirectory)/$(projectDir)"
@@ -52,9 +70,47 @@ steps:
           .
 
         echo "Pushing latest image..."
-        docker push "$(acrName).azurecr.io/$(imageRepository):latest"
+
+        docker push \
+          "$(acrName).azurecr.io/$(imageRepository):latest"
 
         echo "Pushing Build ID image..."
-        docker push "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
 
-        echo "Images pushed successfully."
+        docker push \
+          "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "Docker images pushed successfully."
+
+
+  # --------------------------------------------------
+  # 4. Deploy to Azure Container App
+  # --------------------------------------------------
+  - task: AzureCLI@2
+    displayName: 'Deploy to Azure Container App'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "Deploying image:"
+        echo "$IMAGE"
+
+        echo "Updating Azure Container App..."
+
+        az containerapp update \
+          --name "$(containerAppName)" \
+          --resource-group "$(resourceGroup)" \
+          --image "$IMAGE"
+
+        echo "Container App deployment completed."
+
+        echo "Container App details:"
+        az containerapp show \
+          --name "$(containerAppName)" \
+          --resource-group "$(resourceGroup)" \
+          --query "{Name:name,Status:properties.runningStatus,FQDN:properties.configuration.ingress.fqdn}" \
+          --output table
