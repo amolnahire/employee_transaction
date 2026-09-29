@@ -105,7 +105,7 @@ steps:
   # 4. Connect to AKS and deploy
   # ---------------------------------------------------------
   - task: AzureCLI@2
-    displayName: 'Deploy to AKS'
+    displayName: 'Deploy New Image to AKS'
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
@@ -113,77 +113,84 @@ steps:
       inlineScript: |
         set -e
         
-        echo "======================================"
-        echo "Deploying to AKS"
-        echo "======================================"
+        echo "=========================================="
+        echo "Deploying Employee Artifact to AKS"
+        echo "=========================================="
         
-        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+        IMAGE="employeeregistry.azurecr.io/employee-artifact:$(Build.BuildId)"
         
-        echo "Deploying image:"
+        echo "Image:"
         echo "$IMAGE"
         
-        echo "======================================"
-        echo "Getting AKS credentials"
-        echo "======================================"
+        echo "=========================================="
+        echo "Setting Azure subscription"
+        echo "=========================================="
+        
+        az account set \
+          --subscription "dd989c95-4624-47b6-9ef5-943f27e6a064"
+        
+        echo "=========================================="
+        echo "Downloading AKS credentials"
+        echo "=========================================="
         
         az aks get-credentials \
-          --resource-group "$(aksResourceGroup)" \
-          --name "$(aksClusterName)" \
+          --resource-group "employee-resource" \
+          --name "employee-cluster-test" \
           --overwrite-existing
         
-        echo "======================================"
-        echo "Checking AKS connection"
-        echo "======================================"
+        echo "=========================================="
+        echo "Current Kubernetes Context"
+        echo "=========================================="
+        
+        kubectl config current-context
+        
+        echo "=========================================="
+        echo "AKS Nodes"
+        echo "=========================================="
         
         kubectl get nodes
         
-        echo "======================================"
-        echo "Applying Deployment"
-        echo "======================================"
+        echo "=========================================="
+        echo "Existing Deployments"
+        echo "=========================================="
         
-        kubectl apply \
-          -f "$(Build.SourcesDirectory)/aks/deployment.yaml"
+        kubectl get deployments -A
         
-        echo "======================================"
-        echo "Applying Service"
-        echo "======================================"
-        
-        kubectl apply \
-          -f "$(Build.SourcesDirectory)/aks/service.yaml"
-        
-        echo "======================================"
-        echo "Updating Deployment Image"
-        echo "======================================"
+        echo "=========================================="
+        echo "Updating Employee Artifact"
+        echo "=========================================="
         
         kubectl set image deployment/employee-artifact \
           employee-artifact="$IMAGE"
         
-        echo "======================================"
-        echo "Waiting for Deployment"
-        echo "======================================"
+        echo "=========================================="
+        echo "Waiting for Rollout"
+        echo "=========================================="
         
         kubectl rollout status \
           deployment/employee-artifact \
           --timeout=5m
         
-        echo "======================================"
-        echo "Deployment"
-        echo "======================================"
+        echo "=========================================="
+        echo "Deployment Status"
+        echo "=========================================="
         
-        kubectl get deployment employee-artifact
+        kubectl get deployment employee-artifact -o wide
         
-        echo "======================================"
+        echo "=========================================="
         echo "Pods"
-        echo "======================================"
+        echo "=========================================="
         
         kubectl get pods -o wide
         
-        echo "======================================"
-        echo "Service"
-        echo "======================================"
+        echo "=========================================="
+        echo "Current Image"
+        echo "=========================================="
         
-        kubectl get service employee-artifact-service
+        kubectl get deployment employee-artifact \
+          -o jsonpath='{.spec.template.spec.containers[*].image}'
         
-        echo "======================================"
-        echo "AKS deployment completed successfully"
-        echo "======================================"
+        echo ""
+        echo "=========================================="
+        echo "AKS Deployment Completed"
+        echo "=========================================="
