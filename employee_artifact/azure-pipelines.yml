@@ -114,11 +114,13 @@ steps:
         set -e
         
         echo "======================================"
-        echo "AKS Cluster"
+        echo "Deploying to AKS"
         echo "======================================"
         
-        echo "Resource Group: $(aksResourceGroup)"
-        echo "Cluster: $(aksClusterName)"
+        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+        
+        echo "Deploying image:"
+        echo "$IMAGE"
         
         echo "======================================"
         echo "Getting AKS credentials"
@@ -130,34 +132,34 @@ steps:
           --overwrite-existing
         
         echo "======================================"
-        echo "Checking AKS"
+        echo "Checking AKS connection"
         echo "======================================"
         
         kubectl get nodes
         
         echo "======================================"
-        echo "Applying Kubernetes Deployment"
+        echo "Applying Deployment"
         echo "======================================"
         
         kubectl apply \
           -f "$(Build.SourcesDirectory)/aks/deployment.yaml"
         
         echo "======================================"
-        echo "Applying Kubernetes Service"
+        echo "Applying Service"
         echo "======================================"
         
         kubectl apply \
           -f "$(Build.SourcesDirectory)/aks/service.yaml"
         
         echo "======================================"
-        echo "Updating image"
+        echo "Updating Deployment Image"
         echo "======================================"
         
         kubectl set image deployment/employee-artifact \
-          employee-artifact="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+          employee-artifact="$IMAGE"
         
         echo "======================================"
-        echo "Waiting for rollout"
+        echo "Waiting for Deployment"
         echo "======================================"
         
         kubectl rollout status \
@@ -165,14 +167,23 @@ steps:
           --timeout=5m
         
         echo "======================================"
-        echo "Deployment status"
+        echo "Deployment"
         echo "======================================"
         
         kubectl get deployment employee-artifact
+        
+        echo "======================================"
+        echo "Pods"
+        echo "======================================"
+        
         kubectl get pods -o wide
         
         echo "======================================"
-        echo "Service status"
+        echo "Service"
         echo "======================================"
         
         kubectl get service employee-artifact-service
+        
+        echo "======================================"
+        echo "AKS deployment completed successfully"
+        echo "======================================"
