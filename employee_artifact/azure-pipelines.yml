@@ -105,60 +105,74 @@ steps:
   # 4. Connect to AKS and deploy
   # ---------------------------------------------------------
   - task: AzureCLI@2
-    displayName: 'Deploy Application to AKS'
+    displayName: 'Deploy to AKS'
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-
+        
+        echo "======================================"
+        echo "AKS Cluster"
+        echo "======================================"
+        
+        echo "Resource Group: $(aksResourceGroup)"
+        echo "Cluster: $(aksClusterName)"
+        
         echo "======================================"
         echo "Getting AKS credentials"
         echo "======================================"
-
+        
         az aks get-credentials \
           --resource-group "$(aksResourceGroup)" \
           --name "$(aksClusterName)" \
           --overwrite-existing
-
+        
         echo "======================================"
-        echo "Checking AKS connection"
+        echo "Checking AKS"
         echo "======================================"
-
+        
         kubectl get nodes
-
+        
         echo "======================================"
-        echo "Applying Deployment"
+        echo "Applying Kubernetes Deployment"
         echo "======================================"
-
+        
         kubectl apply \
           -f "$(Build.SourcesDirectory)/aks/deployment.yaml"
-
+        
         echo "======================================"
-        echo "Applying Service"
+        echo "Applying Kubernetes Service"
         echo "======================================"
-
+        
         kubectl apply \
           -f "$(Build.SourcesDirectory)/aks/service.yaml"
-
+        
         echo "======================================"
-        echo "Updating image to Build ID"
+        echo "Updating image"
         echo "======================================"
-
+        
         kubectl set image deployment/employee-artifact \
           employee-artifact="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
-
+        
         echo "======================================"
         echo "Waiting for rollout"
         echo "======================================"
-
-        kubectl rollout status deployment/employee-artifact --timeout=5m
-
+        
+        kubectl rollout status \
+          deployment/employee-artifact \
+          --timeout=5m
+        
         echo "======================================"
-        echo "Deployment completed"
+        echo "Deployment status"
         echo "======================================"
-
+        
         kubectl get deployment employee-artifact
         kubectl get pods -o wide
-        kubectl get service
+        
+        echo "======================================"
+        echo "Service status"
+        echo "======================================"
+        
+        kubectl get service employee-artifact-service
