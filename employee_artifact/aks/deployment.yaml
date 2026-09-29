@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: employee-artifact
+  labels:
+    app: employee-artifact
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: employee-artifact
+  template:
+    metadata:
+      labels:
+        app: employee-artifact
+    spec:
+      containers:
+        - name: employee-artifact
+          image: employeeregistry.azurecr.io/employee-artifact:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

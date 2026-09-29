@@ -7,18 +7,18 @@ pool:
 variables:
   projectDir: 'employee_artifact'
   azureServiceConnection: 'employeeregistry-service-connection'
-
   acrName: 'employeeregistry'
   imageRepository: 'employee-artifact'
 
-  resourceGroup: 'employee-resource'
-  containerAppName: 'employee-container'
+  # AKS details
+  aksResourceGroup: 'employee-resource'
+  aksClusterName: 'employee-cluster-test'
 
 steps:
 
-  # --------------------------------------------------
-  # 1. Check Project Files
-  # --------------------------------------------------
+  # ---------------------------------------------------------
+  # 1. Check project files
+  # ---------------------------------------------------------
   - script: |
       echo "Repository root: $(Build.SourcesDirectory)"
       pwd
@@ -29,12 +29,15 @@ steps:
 
       echo "Gradle wrapper permissions:"
       ls -l "$(Build.SourcesDirectory)/$(projectDir)/gradlew"
+
+      echo "AKS manifest files:"
+      ls -lrth "$(Build.SourcesDirectory)/aks"
     displayName: 'Check Project Files'
 
 
-  # --------------------------------------------------
-  # 2. Build Spring Boot Application
-  # --------------------------------------------------
+  # ---------------------------------------------------------
+  # 2. Build Spring Boot application
+  # ---------------------------------------------------------
   - script: |
       cd "$(Build.SourcesDirectory)/$(projectDir)"
 
@@ -44,9 +47,9 @@ steps:
     displayName: 'Build Spring Boot Application'
 
 
-  # --------------------------------------------------
-  # 3. Build and Push Docker Image
-  # --------------------------------------------------
+  # ---------------------------------------------------------
+  # 3. Build and push Docker image to ACR
+  # ---------------------------------------------------------
   - task: AzureCLI@2
     displayName: 'Build and Push Docker Image to ACR'
     inputs:
@@ -56,61 +59,138 @@ steps:
       inlineScript: |
         set -e
 
-        echo "Logging in to Azure Container Registry..."
+        echo "======================================"
+        echo "Logging in to Azure Container Registry"
+        echo "======================================"
 
         az acr login --name "$(acrName)"
 
         cd "$(Build.SourcesDirectory)/$(projectDir)"
 
-        echo "Building Docker image..."
+        echo "======================================"
+        echo "Building Docker image"
+        echo "======================================"
 
         docker build \
           -t "$(acrName).azurecr.io/$(imageRepository):latest" \
           -t "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)" \
           .
 
-        echo "Pushing latest image..."
+        echo "======================================"
+        echo "Pushing latest image"
+        echo "======================================"
 
         docker push \
           "$(acrName).azurecr.io/$(imageRepository):latest"
 
-        echo "Pushing Build ID image..."
+        echo "======================================"
+        echo "Pushing Build ID image"
+        echo "======================================"
 
         docker push \
           "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
 
-        echo "Docker images pushed successfully."
+        echo "======================================"
+        echo "Images pushed successfully"
+        echo "======================================"
+
+        echo "Latest:"
+        echo "$(acrName).azurecr.io/$(imageRepository):latest"
+
+        echo "Build ID:"
+        echo "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
 
 
-  # --------------------------------------------------
-  # 4. Deploy to Azure Container App
-  # --------------------------------------------------
+  # ---------------------------------------------------------
+  # 4. Connect to AKS and deploy
+  # ---------------------------------------------------------
   - task: AzureCLI@2
-    displayName: 'Deploy to Azure Container App'
+    displayName: 'Deploy New Image to AKS'
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-
-        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
-
-        echo "Deploying image:"
+        
+        echo "=========================================="
+        echo "Deploying Employee Artifact to AKS"
+        echo "=========================================="
+        
+        IMAGE="employeeregistry.azurecr.io/employee-artifact:$(Build.BuildId)"
+        
+        echo "Image:"
         echo "$IMAGE"
-
-        echo "Updating Azure Container App..."
-
-        az containerapp update \
-          --name "$(containerAppName)" \
-          --resource-group "$(resourceGroup)" \
-          --image "$IMAGE"
-
-        echo "Container App deployment completed."
-
-        echo "Container App details:"
-        az containerapp show \
-          --name "$(containerAppName)" \
-          --resource-group "$(resourceGroup)" \
-          --query "{Name:name,Status:properties.runningStatus,FQDN:properties.configuration.ingress.fqdn}" \
-          --output table
+        
+        echo "=========================================="
+        echo "Setting Azure subscription"
+        echo "=========================================="
+        
+        az account set \
+          --subscription "dd989c95-4624-47b6-9ef5-943f27e6a064"
+        
+        echo "=========================================="
+        echo "Downloading AKS credentials"
+        echo "=========================================="
+        
+        az aks get-credentials \
+          --resource-group "employee-resource" \
+          --name "employee-cluster-test" \
+          --overwrite-existing
+        
+        echo "=========================================="
+        echo "Current Kubernetes Context"
+        echo "=========================================="
+        
+        kubectl config current-context
+        
+        echo "=========================================="
+        echo "AKS Nodes"
+        echo "=========================================="
+        
+        kubectl get nodes
+        
+        echo "=========================================="
+        echo "Existing Deployments"
+        echo "=========================================="
+        
+        kubectl get deployments -A
+        
+        echo "=========================================="
+        echo "Updating Employee Artifact"
+        echo "=========================================="
+        
+        kubectl set image deployment/employee-artifact \
+          employee-artifact="$IMAGE"
+        
+        echo "=========================================="
+        echo "Waiting for Rollout"
+        echo "=========================================="
+        
+        kubectl rollout status \
+          deployment/employee-artifact \
+          --timeout=5m
+        
+        echo "=========================================="
+        echo "Deployment Status"
+        echo "=========================================="
+        
+        kubectl get deployment employee-artifact -o wide
+        
+        echo "=========================================="
+        echo "Pods"
+        echo "=========================================="
+        
+        kubectl get pods -o wide
+        
+        echo "=========================================="
+        echo "Current Image"
+        echo "=========================================="
+        
+        kubectl get deployment employee-artifact \
+          -o jsonpath='{.spec.template.spec.containers[*].image}'
+        
+        echo ""
+        echo "=========================================="
+        echo "AKS Deployment Completed"
+        echo "=========================================="
