@@ -12,7 +12,7 @@ variables:
 
   # AKS details
   aksResourceGroup: 'employee-resource'
-  aksClusterName: 'employee-cluster'
+  aksClusterName: 'employee-cluster-test'
 
 steps:
 
