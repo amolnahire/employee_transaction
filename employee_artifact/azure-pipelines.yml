@@ -10,8 +10,15 @@ variables:
   acrName: 'employeeregistry'
   imageRepository: 'employee-artifact'
 
+  # AKS details
+  aksResourceGroup: 'employee-resource'
+  aksClusterName: 'employee-cluster'
+
 steps:
 
+  # ---------------------------------------------------------
+  # 1. Check project files
+  # ---------------------------------------------------------
   - script: |
       echo "Repository root: $(Build.SourcesDirectory)"
       pwd
@@ -22,14 +29,27 @@ steps:
 
       echo "Gradle wrapper permissions:"
       ls -l "$(Build.SourcesDirectory)/$(projectDir)/gradlew"
+
+      echo "AKS manifest files:"
+      ls -lrth "$(Build.SourcesDirectory)/aks"
     displayName: 'Check Project Files'
 
+
+  # ---------------------------------------------------------
+  # 2. Build Spring Boot application
+  # ---------------------------------------------------------
   - script: |
       cd "$(Build.SourcesDirectory)/$(projectDir)"
+
       chmod +x gradlew
+
       ./gradlew clean bootJar --no-daemon
     displayName: 'Build Spring Boot Application'
 
+
+  # ---------------------------------------------------------
+  # 3. Build and push Docker image to ACR
+  # ---------------------------------------------------------
   - task: AzureCLI@2
     displayName: 'Build and Push Docker Image to ACR'
     inputs:
@@ -39,22 +59,106 @@ steps:
       inlineScript: |
         set -e
 
-        echo "Logging in to Azure Container Registry..."
+        echo "======================================"
+        echo "Logging in to Azure Container Registry"
+        echo "======================================"
+
         az acr login --name "$(acrName)"
 
         cd "$(Build.SourcesDirectory)/$(projectDir)"
 
-        echo "Building Docker image..."
+        echo "======================================"
+        echo "Building Docker image"
+        echo "======================================"
 
         docker build \
           -t "$(acrName).azurecr.io/$(imageRepository):latest" \
           -t "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)" \
           .
 
-        echo "Pushing latest image..."
-        docker push "$(acrName).azurecr.io/$(imageRepository):latest"
+        echo "======================================"
+        echo "Pushing latest image"
+        echo "======================================"
 
-        echo "Pushing Build ID image..."
-        docker push "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+        docker push \
+          "$(acrName).azurecr.io/$(imageRepository):latest"
 
-        echo "Images pushed successfully."
+        echo "======================================"
+        echo "Pushing Build ID image"
+        echo "======================================"
+
+        docker push \
+          "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "======================================"
+        echo "Images pushed successfully"
+        echo "======================================"
+
+        echo "Latest:"
+        echo "$(acrName).azurecr.io/$(imageRepository):latest"
+
+        echo "Build ID:"
+        echo "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+
+  # ---------------------------------------------------------
+  # 4. Connect to AKS and deploy
+  # ---------------------------------------------------------
+  - task: AzureCLI@2
+    displayName: 'Deploy Application to AKS'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        echo "======================================"
+        echo "Getting AKS credentials"
+        echo "======================================"
+
+        az aks get-credentials \
+          --resource-group "$(aksResourceGroup)" \
+          --name "$(aksClusterName)" \
+          --overwrite-existing
+
+        echo "======================================"
+        echo "Checking AKS connection"
+        echo "======================================"
+
+        kubectl get nodes
+
+        echo "======================================"
+        echo "Applying Deployment"
+        echo "======================================"
+
+        kubectl apply \
+          -f "$(Build.SourcesDirectory)/aks/deployment.yaml"
+
+        echo "======================================"
+        echo "Applying Service"
+        echo "======================================"
+
+        kubectl apply \
+          -f "$(Build.SourcesDirectory)/aks/service.yaml"
+
+        echo "======================================"
+        echo "Updating image to Build ID"
+        echo "======================================"
+
+        kubectl set image deployment/employee-artifact \
+          employee-artifact="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "======================================"
+        echo "Waiting for rollout"
+        echo "======================================"
+
+        kubectl rollout status deployment/employee-artifact --timeout=5m
+
+        echo "======================================"
+        echo "Deployment completed"
+        echo "======================================"
+
+        kubectl get deployment employee-artifact
+        kubectl get pods -o wide
+        kubectl get service
