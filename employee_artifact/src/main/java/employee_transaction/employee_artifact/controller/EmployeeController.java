@@ -27,6 +27,12 @@ public class EmployeeController {
         return employeeService.createEmployee(employee);
     }
 
+
+    @GetMapping("/hello")
+    public String helloWorld() {
+        return "Hello World";
+    }
+
     @GetMapping
     public List<Employee> getAllEmployees() {
         return employeeService.getAllEmployees();
