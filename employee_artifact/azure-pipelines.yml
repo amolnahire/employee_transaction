@@ -31,7 +31,7 @@ steps:
       ls -l "$(Build.SourcesDirectory)/$(projectDir)/gradlew"
 
       echo "AKS manifest files:"
-      ls -lrth "$(Build.SourcesDirectory)/aks"
+      ls -lrth "$(Build.SourcesDirectory)/$(projectDir)/aks"
     displayName: 'Check Project Files'
 
 
@@ -112,7 +112,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-        cd aks
+       
         echo "=========================================="
         echo "Deploying Employee Artifact to AKS"
         echo "=========================================="
