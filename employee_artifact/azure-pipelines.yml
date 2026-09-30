@@ -112,7 +112,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-        
+        cd aks
         echo "=========================================="
         echo "Deploying Employee Artifact to AKS"
         echo "=========================================="
