@@ -1,22 +1,53 @@
 package employee_transaction.employee_artifact.service;
 
 
-
-
-
 import employee_transaction.employee_artifact.entity.Employee;
+import employee_transaction.employee_artifact.repository.EmployeeRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-public interface EmployeeService {
+@Service
+@RequiredArgsConstructor
+public class EmployeeService {
 
-    Employee createEmployee(Employee employee);
+    private final EmployeeRepository employeeRepository;
 
-    List<Employee> getAllEmployees();
+    public Employee create(Employee employee) {
 
-    Employee getEmployeeById(Long id);
+        return employeeRepository.save(employee);
+    }
 
-    Employee updateEmployee(Long id, Employee employee);
+    public List<Employee> getAll() {
 
-    void deleteEmployee(Long id);
+        return employeeRepository.findAll();
+    }
+
+    public Employee getById(Long id) {
+
+        return employeeRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Employee not found: " + id
+                        )
+                );
+    }
+
+    public Employee update(Long id, Employee employee) {
+
+        Employee existing = getById(id);
+
+        existing.setEmployeeId(employee.getEmployeeId());
+        existing.setName(employee.getName());
+        existing.setDepartment(employee.getDepartment());
+        existing.setEmail(employee.getEmail());
+
+        return employeeRepository.save(existing);
+    }
+
+    public void delete(Long id) {
+
+        employeeRepository.deleteById(id);
+    }
 }
