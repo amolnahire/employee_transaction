@@ -105,92 +105,66 @@ steps:
   # 4. Connect to AKS and deploy
   # ---------------------------------------------------------
   - task: AzureCLI@2
-    displayName: 'Deploy New Image to AKS'
+    displayName: 'Deploy Employee Artifact to AKS'
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
-        set -e
-       
+        set -euo pipefail
+
         echo "=========================================="
-        echo "Deploying Employee Artifact to AKS"
+        echo "Connecting to AKS"
         echo "=========================================="
-        
-        IMAGE="employeeregistry.azurecr.io/employee-artifact:$(Build.BuildId)"
-        
-        echo "Image:"
-        echo "$IMAGE"
-        
-        echo "=========================================="
-        echo "Setting Azure subscription"
-        echo "=========================================="
-        
+
         az account set \
           --subscription "dd989c95-4624-47b6-9ef5-943f27e6a064"
-        
-        echo "=========================================="
-        echo "Downloading AKS credentials"
-        echo "=========================================="
-        
+
         az aks get-credentials \
-          --resource-group "employee-resource" \
-          --name "employee-cluster-test" \
+          --resource-group "$(aksResourceGroup)" \
+          --name "$(aksClusterName)" \
           --overwrite-existing
-        
-        echo "=========================================="
-        echo "Current Kubernetes Context"
-        echo "=========================================="
-        
+
         kubectl config current-context
-        
-        echo "=========================================="
-        echo "AKS Nodes"
-        echo "=========================================="
-        
         kubectl get nodes
-        
+
         echo "=========================================="
-        echo "Existing Deployments"
+        echo "Deploying Employee Artifact"
         echo "=========================================="
-        
-        kubectl get deployments -A
-        
+
+        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "Image: $IMAGE"
+
+        # Create the Deployment if it doesn't exist,
+        # or update it if it already exists.
+        kubectl create deployment employee-artifact \
+          --image="$IMAGE" \
+          --port=8080 \
+          --dry-run=client -o yaml \
+          | kubectl apply -f -
+
         echo "=========================================="
-        echo "Updating Employee Artifact"
+        echo "Updating container image"
         echo "=========================================="
-        
+
         kubectl set image deployment/employee-artifact \
           employee-artifact="$IMAGE"
-        
+
         echo "=========================================="
-        echo "Waiting for Rollout"
+        echo "Waiting for rollout"
         echo "=========================================="
-        
-        kubectl rollout status \
-          deployment/employee-artifact \
+
+        kubectl rollout status deployment/employee-artifact \
           --timeout=5m
-        
+
         echo "=========================================="
-        echo "Deployment Status"
+        echo "Deployment details"
         echo "=========================================="
-        
+
         kubectl get deployment employee-artifact -o wide
-        
-        echo "=========================================="
-        echo "Pods"
-        echo "=========================================="
-        
         kubectl get pods -o wide
-        
+
         echo "=========================================="
-        echo "Current Image"
-        echo "=========================================="
-        
-        kubectl get deployment employee-artifact \
-          -o jsonpath='{.spec.template.spec.containers[*].image}'
-        
-        echo ""
-        echo "=========================================="
-        echo "AKS Deployment Completed"
+        echo "Deployment completed"
         echo "=========================================="
