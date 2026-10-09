@@ -128,21 +128,15 @@ steps:
         kubectl config current-context
         kubectl get nodes
 
-        echo "=========================================="
-        echo "Deploying Employee Artifact"
-        echo "=========================================="
-
         IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
 
+        echo "=========================================="
+        echo "Creating or updating Employee Artifact deployment"
+        echo "=========================================="
         echo "Image: $IMAGE"
 
-        # Create the Deployment if it doesn't exist,
-        # or update it if it already exists.
-        kubectl create deployment employee-artifact \
-          --image="$IMAGE" \
-          --port=8080 \
-          --dry-run=client -o yaml \
-          | kubectl apply -f -
+        kubectl apply \
+          -f "$(Build.SourcesDirectory)/$(projectDir)/aks/deployment.yaml"
 
         echo "=========================================="
         echo "Updating container image"
