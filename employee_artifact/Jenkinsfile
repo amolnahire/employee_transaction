@@ -95,7 +95,7 @@ pipeline {
                 withCredentials([
                     string(
                         credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
+                        variable: 'squ_e661f7562cc2c362dd34354d53ef5e72377c2f0e'
                     )
                 ]) {
                     dir("${PROJECT_DIR}") {
