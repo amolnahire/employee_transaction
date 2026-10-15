@@ -3,6 +3,8 @@ plugins {
     id 'war'
     id 'org.springframework.boot' version '3.3.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.sonarqube' version '6.2.0.5505'
+    id 'jacoco'
 }
 
 group = 'employee_transaction'
@@ -38,7 +40,31 @@ dependencies {
 }
 
 tasks.named('test') {
-
-
     useJUnitPlatform()
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+sonar {
+    properties {
+        property 'sonar.projectKey', 'employee_project_employee_project_3cb1c2b0-7baf-4701-a16b-bd747a51c8bd'
+        property 'sonar.projectName', 'employee_project'
+        property 'sonar.host.url', 'http://20.112.234.64:9000'
+        property 'sonar.sources', 'src/main/java'
+        property 'sonar.tests', 'src/test/java'
+        property 'sonar.java.binaries', 'build/classes/java/main'
+        property 'sonar.java.test.binaries', 'build/classes/java/test'
+        property 'sonar.coverage.jacoco.xmlReportPaths', 'build/reports/jacoco/test/jacocoTestReport.xml'
+    }
+}
+
+tasks.named('sonar') {
+    dependsOn tasks.named('jacocoTestReport')
 }

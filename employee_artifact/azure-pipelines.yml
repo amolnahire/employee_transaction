@@ -1,5 +1,12 @@
 trigger:
-  - main
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
 
 pool:
   vmImage: ubuntu-latest
@@ -36,22 +43,45 @@ steps:
 
 
   # ---------------------------------------------------------
-  # 2. Build Spring Boot application
+  # 2. Run tests and build the Spring Boot application
   # ---------------------------------------------------------
   - script: |
       cd "$(Build.SourcesDirectory)/$(projectDir)"
 
       chmod +x gradlew
 
-      ./gradlew clean bootJar --no-daemon
-    displayName: 'Build Spring Boot Application'
-
+      ./gradlew clean test bootJar --no-daemon
+    displayName: 'Test and Build Spring Boot Application'
 
   # ---------------------------------------------------------
-  # 3. Build and push Docker image to ACR
+  # 3. Publish test results
+  # ---------------------------------------------------------
+  - task: PublishTestResults@2
+    displayName: 'Publish Test Results'
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: '$(Build.SourcesDirectory)/$(projectDir)/**/build/test-results/test/TEST-*.xml'
+      failTaskOnFailedTests: true
+      testRunTitle: 'Employee Artifact Tests'
+
+  # ---------------------------------------------------------
+  # 4. Analyze with SonarQube
+  # ---------------------------------------------------------
+  - script: |
+      cd "$(Build.SourcesDirectory)/$(projectDir)"
+      ./gradlew sonar --no-daemon
+    displayName: 'Analyze with SonarQube'
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    env:
+      SONAR_TOKEN: $(SONAR_TOKEN)
+
+  # ---------------------------------------------------------
+  # 5. Build and push Docker image to ACR
   # ---------------------------------------------------------
   - task: AzureCLI@2
     displayName: 'Build and Push Docker Image to ACR'
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
@@ -102,10 +132,11 @@ steps:
 
 
   # ---------------------------------------------------------
-  # 4. Connect to AKS and deploy
+  # 6. Connect to AKS and deploy
   # ---------------------------------------------------------
   - task: AzureCLI@2
     displayName: 'Deploy Employee Artifact to AKS'
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     inputs:
       azureSubscription: '$(azureServiceConnection)'
       scriptType: bash
@@ -124,8 +155,6 @@ steps:
           --resource-group "$(aksResourceGroup)" \
           --name "$(aksClusterName)" \
           --overwrite-existing
-
-
         kubectl config current-context
         kubectl get nodes
 
