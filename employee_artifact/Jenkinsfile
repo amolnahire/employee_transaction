@@ -8,27 +8,26 @@ pipeline {
         skipDefaultCheckout(false)
     }
 
-
     parameters {
         booleanParam(
             name: 'SONAR_ENABLED',
             defaultValue: false,
-            description: 'Run SonarQube analysis. Enable after connectivity is fixed.'
+            description: 'Run SonarQube analysis when the server is reachable.'
         )
     }
 
     environment {
-        PROJECT_DIR       = 'employee_artifact'
+        PROJECT_DIR = 'employee_artifact'
 
         AZURE_SUBSCRIPTION_ID = 'dd989c95-4624-47b6-9ef5-943f27e6a064'
-        AZURE_RESOURCE_GROUP  = 'employee-resource'
-        AKS_CLUSTER_NAME      = 'employee-cluster-test'
+        AZURE_RESOURCE_GROUP = 'employee-resource'
+        AKS_CLUSTER_NAME = 'employee-cluster-test'
 
-        ACR_NAME          = 'employeeregistry'
-        ACR_LOGIN_SERVER  = 'employeeregistry.azurecr.io'
-        IMAGE_REPOSITORY  = 'employee-artifact'
+        ACR_NAME = 'employeeregistry'
+        ACR_LOGIN_SERVER = 'employeeregistry.azurecr.io'
+        IMAGE_REPOSITORY = 'employee-artifact'
 
-        SONAR_HOST_URL    = 'http://20.112.234.64:9000'
+        SONAR_HOST_URL = 'http://20.112.234.64:9000'
     }
 
     stages {
@@ -36,8 +35,14 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+
                 echo "Workspace: ${WORKSPACE}"
-                sh 'pwd && ls -la'
+
+                sh '''
+                    set -eu
+                    pwd
+                    ls -la
+                '''
             }
         }
 
@@ -46,18 +51,15 @@ pipeline {
                 sh '''
                     set -eu
 
-                    echo "Project files:"
+                    echo "Checking project files..."
                     ls -la "$PROJECT_DIR"
 
-                    echo "Gradle wrapper:"
-                    ls -l "$PROJECT_DIR/gradlew"
-
-                    echo "AKS manifests:"
-                    ls -la "$PROJECT_DIR/aks"
-
                     test -f "$PROJECT_DIR/build.gradle"
+                    test -f "$PROJECT_DIR/gradlew"
                     test -f "$PROJECT_DIR/Dockerfile"
                     test -f "$PROJECT_DIR/aks/deployment.yaml"
+
+                    echo "All required files are present."
                 '''
             }
         }
@@ -67,11 +69,15 @@ pipeline {
                 dir("${PROJECT_DIR}") {
                     sh '''
                         set -eu
+
                         chmod +x gradlew
+
+                        echo "Running Gradle tests and building Spring Boot..."
                         ./gradlew clean test bootJar --no-daemon
                     '''
                 }
             }
+
             post {
                 always {
                     junit(
@@ -84,7 +90,9 @@ pipeline {
 
         stage('SonarQube Analysis') {
             when {
-                expression { params.SONAR_ENABLED }
+                expression {
+                    params.SONAR_ENABLED
+                }
             }
 
             steps {
@@ -94,17 +102,26 @@ pipeline {
                         variable: 'SONAR_TOKEN'
                     )
                 ]) {
-                    sh '''
-                        set -eu
+                    dir("${PROJECT_DIR}") {
+                        sh '''
+                            set -eu
 
-                        echo "Checking SonarQube connectivity..."
+                            echo "Checking SonarQube connectivity..."
 
-                        curl -fsS --connect-timeout 10 \
-                          "$SONAR_HOST_URL/api/system/status"
+                            curl -fsS \
+                              --connect-timeout 10 \
+                              --max-time 20 \
+                              "$SONAR_HOST_URL/api/system/status"
 
-                        cd "$PROJECT_DIR"
-                        ./gradlew sonar --no-daemon
-                    '''
+                            echo "Starting SonarQube analysis..."
+
+                            ./gradlew sonar \
+                              --no-daemon \
+                              -Dsonar.host.url="$SONAR_HOST_URL"
+
+                            echo "SonarQube analysis completed."
+                        '''
+                    }
                 }
             }
         }
@@ -129,6 +146,8 @@ pipeline {
                     sh '''
                         set -eu
 
+                        echo "Logging in to Azure..."
+
                         az login \
                           --service-principal \
                           --username "$AZURE_CLIENT_ID" \
@@ -139,6 +158,7 @@ pipeline {
                         az account set \
                           --subscription "$AZURE_SUBSCRIPTION_ID"
 
+                        echo "Logging in to Azure Container Registry..."
                         az acr login --name "$ACR_NAME"
 
                         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY"
@@ -146,16 +166,22 @@ pipeline {
 
                         cd "$PROJECT_DIR"
 
+                        echo "Building Docker image: $BUILD_IMAGE"
+
                         docker build \
                           -t "$BUILD_IMAGE" \
                           -t "$IMAGE:latest" \
                           .
 
+                        echo "Pushing build-number image..."
                         docker push "$BUILD_IMAGE"
+
+                        echo "Pushing latest image..."
                         docker push "$IMAGE:latest"
 
-                        echo "Pushed: $BUILD_IMAGE"
-                        echo "Pushed: $IMAGE:latest"
+                        echo "Docker images pushed successfully."
+                        echo "Build image: $BUILD_IMAGE"
+                        echo "Latest image: $IMAGE:latest"
                     '''
                 }
             }
@@ -181,6 +207,8 @@ pipeline {
                     sh '''
                         set -eu
 
+                        echo "Logging in to Azure..."
+
                         az login \
                           --service-principal \
                           --username "$AZURE_CLIENT_ID" \
@@ -191,29 +219,44 @@ pipeline {
                         az account set \
                           --subscription "$AZURE_SUBSCRIPTION_ID"
 
+                        echo "Getting AKS cluster credentials..."
+
                         az aks get-credentials \
                           --resource-group "$AZURE_RESOURCE_GROUP" \
                           --name "$AKS_CLUSTER_NAME" \
                           --overwrite-existing
 
+                        echo "Checking Kubernetes cluster..."
                         kubectl get nodes
 
                         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
 
+                        echo "Applying Kubernetes deployment..."
                         kubectl apply \
                           -f "$PROJECT_DIR/aks/deployment.yaml"
+
+                        echo "Updating application image to $IMAGE..."
 
                         kubectl set image \
                           deployment/employee-artifact \
                           employee-artifact="$IMAGE"
 
+                        echo "Waiting for rollout..."
+
                         kubectl rollout status \
                           deployment/employee-artifact \
                           --timeout=5m
 
+                        echo "Deployment details:"
                         kubectl get deployment employee-artifact -o wide
+
+                        echo "Pods:"
                         kubectl get pods -o wide
+
+                        echo "Services:"
                         kubectl get services
+
+                        echo "AKS deployment completed successfully."
                     '''
                 }
             }
@@ -230,8 +273,8 @@ pipeline {
         }
 
         always {
-            echo "Build: ${BUILD_NUMBER}"
-            echo "Result: ${currentBuild.currentResult}"
+            echo "Build number: ${BUILD_NUMBER}"
+            echo "Build result: ${currentBuild.currentResult}"
         }
     }
 }
