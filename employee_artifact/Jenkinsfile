@@ -8,6 +8,7 @@ pipeline {
         skipDefaultCheckout(false)
     }
 
+
     parameters {
         booleanParam(
             name: 'SONAR_ENABLED',
