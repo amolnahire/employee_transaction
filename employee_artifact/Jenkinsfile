@@ -1,0 +1,236 @@
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        skipDefaultCheckout(false)
+    }
+
+    parameters {
+        booleanParam(
+            name: 'SONAR_ENABLED',
+            defaultValue: false,
+            description: 'Run SonarQube analysis. Enable after connectivity is fixed.'
+        )
+    }
+
+    environment {
+        PROJECT_DIR       = 'employee_artifact'
+
+        AZURE_SUBSCRIPTION_ID = 'dd989c95-4624-47b6-9ef5-943f27e6a064'
+        AZURE_RESOURCE_GROUP  = 'employee-resource'
+        AKS_CLUSTER_NAME      = 'employee-cluster-test'
+
+        ACR_NAME          = 'employeeregistry'
+        ACR_LOGIN_SERVER  = 'employeeregistry.azurecr.io'
+        IMAGE_REPOSITORY  = 'employee-artifact'
+
+        SONAR_HOST_URL    = 'http://20.112.234.64:9000'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Workspace: ${WORKSPACE}"
+                sh 'pwd && ls -la'
+            }
+        }
+
+        stage('Check Project Files') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Project files:"
+                    ls -la "$PROJECT_DIR"
+
+                    echo "Gradle wrapper:"
+                    ls -l "$PROJECT_DIR/gradlew"
+
+                    echo "AKS manifests:"
+                    ls -la "$PROJECT_DIR/aks"
+
+                    test -f "$PROJECT_DIR/build.gradle"
+                    test -f "$PROJECT_DIR/Dockerfile"
+                    test -f "$PROJECT_DIR/aks/deployment.yaml"
+                '''
+            }
+        }
+
+        stage('Test and Build Spring Boot') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        set -eu
+                        chmod +x gradlew
+                        ./gradlew clean test bootJar --no-daemon
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit(
+                        testResults: 'employee_artifact/**/build/test-results/test/TEST-*.xml',
+                        allowEmptyResults: true
+                    )
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            when {
+                expression { params.SONAR_ENABLED }
+            }
+
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        echo "Checking SonarQube connectivity..."
+
+                        curl -fsS --connect-timeout 10 \
+                          "$SONAR_HOST_URL/api/system/status"
+
+                        cd "$PROJECT_DIR"
+                        ./gradlew sonar --no-daemon
+                    '''
+                }
+            }
+        }
+
+        stage('Build and Push Docker Image') {
+            when {
+                branch 'main'
+            }
+
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'azure-service-principal',
+                        usernameVariable: 'AZURE_CLIENT_ID',
+                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'azure-tenant-id',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        az login \
+                          --service-principal \
+                          --username "$AZURE_CLIENT_ID" \
+                          --password "$AZURE_CLIENT_SECRET" \
+                          --tenant "$AZURE_TENANT_ID" \
+                          --output none
+
+                        az account set \
+                          --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                        az acr login --name "$ACR_NAME"
+
+                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY"
+                        BUILD_IMAGE="$IMAGE:$BUILD_NUMBER"
+
+                        cd "$PROJECT_DIR"
+
+                        docker build \
+                          -t "$BUILD_IMAGE" \
+                          -t "$IMAGE:latest" \
+                          .
+
+                        docker push "$BUILD_IMAGE"
+                        docker push "$IMAGE:latest"
+
+                        echo "Pushed: $BUILD_IMAGE"
+                        echo "Pushed: $IMAGE:latest"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to AKS') {
+            when {
+                branch 'main'
+            }
+
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'azure-service-principal',
+                        usernameVariable: 'AZURE_CLIENT_ID',
+                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'azure-tenant-id',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        az login \
+                          --service-principal \
+                          --username "$AZURE_CLIENT_ID" \
+                          --password "$AZURE_CLIENT_SECRET" \
+                          --tenant "$AZURE_TENANT_ID" \
+                          --output none
+
+                        az account set \
+                          --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                        az aks get-credentials \
+                          --resource-group "$AZURE_RESOURCE_GROUP" \
+                          --name "$AKS_CLUSTER_NAME" \
+                          --overwrite-existing
+
+                        kubectl get nodes
+
+                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
+
+                        kubectl apply \
+                          -f "$PROJECT_DIR/aks/deployment.yaml"
+
+                        kubectl set image \
+                          deployment/employee-artifact \
+                          employee-artifact="$IMAGE"
+
+                        kubectl rollout status \
+                          deployment/employee-artifact \
+                          --timeout=5m
+
+                        kubectl get deployment employee-artifact -o wide
+                        kubectl get pods -o wide
+                        kubectl get services
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Employee Artifact pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Review the failed stage and console output.'
+        }
+
+        always {
+            echo "Build: ${BUILD_NUMBER}"
+            echo "Result: ${currentBuild.currentResult}"
+        }
+    }
+}
