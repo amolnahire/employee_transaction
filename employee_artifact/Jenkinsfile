@@ -154,7 +154,7 @@ stage('SonarQube Quality Gate') {
 
         stage('Build and Push Docker Image') {
             when {
-                branch 'main'
+                branch 'master'
             }
 
             steps {
