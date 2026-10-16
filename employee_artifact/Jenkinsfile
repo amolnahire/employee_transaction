@@ -153,9 +153,9 @@ stage('SonarQube Quality Gate') {
 }
 
         stage('Build and Push Docker Image') {
-            when {
-                branch 'master'
-            }
+            // when {
+            //     branch 'master'
+            // }
 
             steps {
                 withCredentials([
@@ -210,12 +210,9 @@ stage('SonarQube Quality Gate') {
         }
 
         stage('Deploy to AKS') {
-    when {
-        anyOf {
-            branch 'main'
-             branch 'master'
-           }
-        }
+// when {
+//     branch 'master'
+// }
 
             steps {
                 withCredentials([
