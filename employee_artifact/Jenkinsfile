@@ -210,9 +210,12 @@ stage('SonarQube Quality Gate') {
         }
 
         stage('Deploy to AKS') {
-            when {
-                branch 'main'
-            }
+    when {
+        anyOf {
+            branch 'main'
+             branch 'master'
+           }
+        }
 
             steps {
                 withCredentials([
