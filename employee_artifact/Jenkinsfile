@@ -12,7 +12,7 @@ pipeline {
         booleanParam(
             name: 'SONAR_ENABLED',
             defaultValue: true,
-            description: 'Run SonarQube analysis'
+            description: 'Run SonarQube analysis and Quality Gate'
         )
     }
 
@@ -55,6 +55,7 @@ pipeline {
                     test -f "$PROJECT_DIR/gradlew"
                     test -f "$PROJECT_DIR/Dockerfile"
                     test -f "$PROJECT_DIR/aks/deployment.yaml"
+                    test -f "$PROJECT_DIR/aks/service.yaml"
 
                     echo "Project files validated."
                 '''
@@ -68,7 +69,6 @@ pipeline {
                         set -eu
 
                         chmod +x gradlew
-
                         ./gradlew clean test bootJar --no-daemon
                     '''
                 }
@@ -92,32 +92,35 @@ pipeline {
             }
 
             steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
-                    )
-                ]) {
-                    dir("${PROJECT_DIR}") {
-                        sh '''
-                            set -eu
+                withSonarQubeEnv('SonarQubeServer') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonar-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
+                        dir("${PROJECT_DIR}") {
+                            sh '''
+                                set -eu
 
-                            echo "Checking SonarQube connectivity..."
+                                echo "Checking SonarQube connectivity..."
 
-                            curl -fsS \
-                              --connect-timeout 10 \
-                              --max-time 20 \
-                              "$SONAR_HOST_URL/api/system/status"
+                                curl -fsS \
+                                  --connect-timeout 10 \
+                                  --max-time 20 \
+                                  "$SONAR_HOST_URL/api/system/status"
 
-                            echo "Running SonarQube analysis..."
+                                echo
+                                echo "Running SonarQube analysis..."
 
-                            ./gradlew sonar \
-                              --no-daemon \
-                              -Dsonar.host.url="$SONAR_HOST_URL" \
-                              -Dsonar.token="$SONAR_TOKEN"
+                                ./gradlew sonar \
+                                  --no-daemon \
+                                  -Dsonar.host.url="$SONAR_HOST_URL" \
+                                  -Dsonar.token="$SONAR_TOKEN"
 
-                            echo "SonarQube analysis completed."
-                        '''
+                                echo "SonarQube analysis completed."
+                            '''
+                        }
                     }
                 }
             }
@@ -132,9 +135,19 @@ pipeline {
 
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate(
-                        abortPipeline: true
-                    )
+                    script {
+                        def qualityGate = waitForQualityGate(
+                            abortPipeline: false
+                        )
+
+                        echo "SonarQube Quality Gate: ${qualityGate.status}"
+
+                        if (qualityGate.status != 'OK') {
+                            error(
+                                "SonarQube Quality Gate failed: ${qualityGate.status}"
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -171,26 +184,26 @@ pipeline {
                         az account set \
                           --subscription "$AZURE_SUBSCRIPTION_ID"
 
-                        echo "Logging in to ACR..."
+                        echo "Logging in to Azure Container Registry..."
                         az acr login --name "$ACR_NAME"
 
                         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY"
                         BUILD_IMAGE="$IMAGE:$BUILD_NUMBER"
-
-                        cd "$PROJECT_DIR"
 
                         echo "Building image: $BUILD_IMAGE"
 
                         docker build \
                           -t "$BUILD_IMAGE" \
                           -t "$IMAGE:latest" \
-                          .
+                          "$PROJECT_DIR"
 
+                        echo "Pushing build-specific image..."
                         docker push "$BUILD_IMAGE"
+
+                        echo "Pushing latest image..."
                         docker push "$IMAGE:latest"
 
-                        echo "Images pushed successfully."
-                        echo "$BUILD_IMAGE"
+                        echo "Docker images pushed successfully."
                     '''
                 }
             }
@@ -235,28 +248,32 @@ pipeline {
                           --name "$AKS_CLUSTER_NAME" \
                           --overwrite-existing
 
+                        echo "Checking Kubernetes nodes..."
                         kubectl get nodes
 
-                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
-
-                        echo "Applying Kubernetes deployment..."
+                        echo "Applying Kubernetes manifests..."
 
                         kubectl apply \
                           -f "$PROJECT_DIR/aks/deployment.yaml"
 
-                        echo "Updating deployment image..."
+                        kubectl apply \
+                          -f "$PROJECT_DIR/aks/service.yaml"
+
+                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
+
+                        echo "Updating deployment image to $IMAGE"
 
                         kubectl set image \
                           deployment/employee-artifact \
                           employee-artifact="$IMAGE"
 
-                        echo "Waiting for rollout..."
+                        echo "Waiting for deployment rollout..."
 
                         kubectl rollout status \
                           deployment/employee-artifact \
                           --timeout=5m
 
-                        echo "Deployment status:"
+                        echo "Deployment:"
                         kubectl get deployment employee-artifact -o wide
 
                         echo "Pods:"
@@ -264,6 +281,8 @@ pipeline {
 
                         echo "Services:"
                         kubectl get services
+
+                        echo "AKS deployment completed successfully."
                     '''
                 }
             }
@@ -285,3 +304,4 @@ pipeline {
         }
     }
 }
+
