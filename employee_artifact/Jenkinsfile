@@ -92,7 +92,7 @@ pipeline {
             }
 
             steps {
-                withSonarQubeEnv('SonarQubeServer') {
+                withSonarQubeEnv('sonarqube') {
                     withCredentials([
                         string(
                             credentialsId: 'sonar-token',
