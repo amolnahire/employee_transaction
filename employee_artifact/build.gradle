@@ -41,7 +41,7 @@ publishing {
             name = 'nexus'
             url = uri(
                 System.getenv('NEXUS_URL')
-                    ?: 'http://20.175.104.105:8081/repository/maven-releases/'
+                    ?: 'http://20.175.104.105:8081/repository/maven-snapshots/'
             )
 
             credentials {

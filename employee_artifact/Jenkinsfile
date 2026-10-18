@@ -164,7 +164,7 @@ stage('Publish Artifact to Nexus') {
                 )
             ]) {
                 withEnv([
-                    'NEXUS_URL=http://20.175.104.105:8081/repository/maven-releases-employee/'
+                    'NEXUS_URL=http://20.175.104.105:8081/repository/maven-releases/'
                 ]) {
                     sh '''
                         set +x
