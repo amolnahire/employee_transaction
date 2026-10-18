@@ -152,6 +152,36 @@ stage('SonarQube Quality Gate') {
     }
 }
 
+
+stage('Publish Artifact to Nexus') {
+    steps {
+        dir('employee_artifact') {
+            withCredentials([
+                usernamePassword(
+                    credentialsId: 'nexus-credentials',
+                    usernameVariable: 'NEXUS_USERNAME',
+                    passwordVariable: 'NEXUS_PASSWORD'
+                )
+            ]) {
+                withEnv([
+                    'NEXUS_URL=http://20.175.104.105:8081/repository/maven-releases-employee/'
+                ]) {
+                    sh '''
+                        set +x
+
+                        ./gradlew publish \
+                          -PreleaseVersion=1.0.${BUILD_NUMBER} \
+                          --no-daemon
+                    '''
+                }
+            }
+        }
+    }
+}
+
+
+
+
         stage('Build and Push Docker Image') {
             // when {
             //     branch 'master'
