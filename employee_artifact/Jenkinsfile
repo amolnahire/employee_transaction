@@ -186,7 +186,7 @@ stage('Trivy Image Scan') {
         sh '''
             IMAGE="employeeregistry.azurecr.io/employee-artifact:${BUILD_NUMBER}"
 
-            trivy image \
+          sudo trivy image \
               --scanners vuln \
               --severity HIGH,CRITICAL \
               --exit-code 1 \
