@@ -181,6 +181,22 @@ stage('Publish Artifact to Nexus') {
 
 
 
+stage('Trivy Image Scan') {
+    steps {
+        sh '''
+            IMAGE="employeeregistry.azurecr.io/employee-artifact:${BUILD_NUMBER}"
+
+            trivy image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --ignore-unfixed \
+              "$IMAGE"
+        '''
+    }
+}
+
+
 
         stage('Build and Push Docker Image') {
             // when {
