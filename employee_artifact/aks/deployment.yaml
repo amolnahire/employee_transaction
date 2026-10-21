@@ -21,6 +21,20 @@ spec:
           ports:
             - containerPort: 8080
               protocol: TCP
+          env:
+            - name: DD_METRICS_ENABLED
+              value: "true"
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-api-key
+                  key: api-key
+            - name: DD_SERVICE
+              value: employee-artifact
+            - name: DD_ENV
+              value: production
+            - name: DD_VERSION
+              value: latest
           resources:
             requests:
               cpu: "250m"

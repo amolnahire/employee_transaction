@@ -20,12 +20,9 @@ java {
     }
 }
 
-
-
 repositories {
     mavenCentral()
 }
-
 
 publishing {
     publications {
@@ -62,6 +59,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-batch'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+      implementation 'com.datadoghq:datadog-api-client:2.62.0'
+
+   implementation 'io.micrometer:micrometer-registry-datadog'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
