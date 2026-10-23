@@ -386,6 +386,27 @@ echo $PGDATABASE
 Do not print or commit:
 
 PGPASSWORD
+
+## Datadog Metrics
+
+The application exports Spring Boot/Micrometer metrics directly to Datadog.
+Set `DD_API_KEY` from a secret store and enable export with
+`DD_METRICS_ENABLED=true`. The Datadog site defaults to US1; set
+`DD_METRICS_URI` to your site's API URL if your account uses another site.
+Metrics are tagged with `DD_SERVICE`, `DD_ENV`, and `DD_VERSION`.
+
+For AKS, create the Kubernetes Secret before applying the deployment. Set
+`DD_API_KEY` in your shell from a secure secret manager; do not put the key in
+this repository or a manifest:
+
+```sh
+kubectl create secret generic datadog-api-key \
+  --from-literal=api-key="$DD_API_KEY"
+kubectl apply -f aks/deployment.yaml
+```
+
+For local runs, export `DD_API_KEY` and `DD_METRICS_ENABLED=true` before
+starting the application.
 14. Azure PostgreSQL Connection
 
 The application uses:
